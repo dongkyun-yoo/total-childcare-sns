@@ -28,6 +28,27 @@ dev: ## 개발 서버 시작 (Docker + 모든 서비스)
 	@docker-compose up -d
 	@echo "$(GREEN)✅ 개발 서버가 시작되었습니다!$(NC)"
 	@echo "$(BLUE)📊 웹 대시보드: http://localhost:3000$(NC)"
+
+db-init: ## 데이터베이스 초기화
+	@echo "$(GREEN)🗄️ 데이터베이스를 초기화합니다...$(NC)"
+	@if command -v psql >/dev/null 2>&1; then \
+		PGPASSWORD=password psql -h localhost -p 5432 -U postgres -d postgres -f infrastructure/docker/postgres/init-simple.sql; \
+	else \
+		echo "$(RED)❌ psql not found. Please install PostgreSQL client.$(NC)"; \
+	fi
+	@echo "$(GREEN)✅ 데이터베이스 초기화 완료!$(NC)"
+
+db-test: ## 데이터베이스 연결 테스트
+	@echo "$(GREEN)🔍 데이터베이스 연결을 테스트합니다...$(NC)"
+	@./scripts/db-test.sh
+
+services: ## 서비스 상태 확인
+	@echo "$(GREEN)📊 서비스 상태:$(NC)"
+	@echo "================="
+	@curl -s http://localhost:3000/health 2>/dev/null | jq '.service + ": " + .status' 2>/dev/null || echo "api-gateway: offline"
+	@curl -s http://localhost:3001/health 2>/dev/null | jq '.service + ": " + .status' 2>/dev/null || echo "family-auth: offline"
+	@curl -s http://localhost:3002/health 2>/dev/null | jq '.service + ": " + .status' 2>/dev/null || echo "child-schedule: offline"
+	@curl -s http://localhost:3003/health 2>/dev/null | jq '.service + ": " + .status' 2>/dev/null || echo "location-tracking: offline"
 	@echo "$(BLUE)🗄️  PgAdmin: http://localhost:5050$(NC)"
 	@echo "$(BLUE)🔴 Redis Commander: http://localhost:8081$(NC)"
 
