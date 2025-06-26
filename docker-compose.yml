@@ -1,0 +1,263 @@
+version: '3.8'
+
+services:
+  # 데이터베이스 서비스
+  postgres:
+    image: postgres:15-alpine
+    container_name: childcare_postgres
+    environment:
+      POSTGRES_DB: total_childcare_sns
+      POSTGRES_USER: childcare_user
+      POSTGRES_PASSWORD: childcare_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infrastructure/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - childcare-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: childcare_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - childcare-network
+
+  mongodb:
+    image: mongo:7
+    container_name: childcare_mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: rootpassword
+      MONGO_INITDB_DATABASE: total_childcare_sns
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+    networks:
+      - childcare-network
+
+  # 마이크로서비스들
+  auth-service:
+    build:
+      context: ./services/auth
+      dockerfile: Dockerfile
+    container_name: childcare_auth
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://childcare_user:childcare_password@postgres:5432/total_childcare_sns
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: dev-jwt-secret-key
+      PORT: 3001
+    ports:
+      - "3001:3001"
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - childcare-network
+    volumes:
+      - ./services/auth:/app
+      - /app/node_modules
+
+  task-service:
+    build:
+      context: ./services/task
+      dockerfile: Dockerfile
+    container_name: childcare_task
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://childcare_user:childcare_password@postgres:5432/total_childcare_sns
+      REDIS_URL: redis://redis:6379
+      AUTH_SERVICE_URL: http://auth-service:3001
+      PORT: 3002
+    ports:
+      - "3002:3002"
+    depends_on:
+      - postgres
+      - redis
+      - auth-service
+    networks:
+      - childcare-network
+    volumes:
+      - ./services/task:/app
+      - /app/node_modules
+
+  calendar-service:
+    build:
+      context: ./services/calendar
+      dockerfile: Dockerfile
+    container_name: childcare_calendar
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://childcare_user:childcare_password@postgres:5432/total_childcare_sns
+      REDIS_URL: redis://redis:6379
+      AUTH_SERVICE_URL: http://auth-service:3001
+      PORT: 3003
+    ports:
+      - "3003:3003"
+    depends_on:
+      - postgres
+      - redis
+      - auth-service
+    networks:
+      - childcare-network
+    volumes:
+      - ./services/calendar:/app
+      - /app/node_modules
+
+  notification-service:
+    build:
+      context: ./services/notification
+      dockerfile: Dockerfile
+    container_name: childcare_notification
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://childcare_user:childcare_password@postgres:5432/total_childcare_sns
+      REDIS_URL: redis://redis:6379
+      MONGODB_URL: mongodb://root:rootpassword@mongodb:27017/total_childcare_sns?authSource=admin
+      AUTH_SERVICE_URL: http://auth-service:3001
+      PORT: 3004
+    ports:
+      - "3004:3004"
+    depends_on:
+      - postgres
+      - redis
+      - mongodb
+      - auth-service
+    networks:
+      - childcare-network
+    volumes:
+      - ./services/notification:/app
+      - /app/node_modules
+
+  websocket-service:
+    build:
+      context: ./services/websocket
+      dockerfile: Dockerfile
+    container_name: childcare_websocket
+    environment:
+      NODE_ENV: development
+      REDIS_URL: redis://redis:6379
+      AUTH_SERVICE_URL: http://auth-service:3001
+      PORT: 3005
+    ports:
+      - "3005:3005"
+    depends_on:
+      - redis
+      - auth-service
+    networks:
+      - childcare-network
+    volumes:
+      - ./services/websocket:/app
+      - /app/node_modules
+
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: childcare_gateway
+    environment:
+      NODE_ENV: development
+      REDIS_URL: redis://redis:6379
+      AUTH_SERVICE_URL: http://auth-service:3001
+      TASK_SERVICE_URL: http://task-service:3002
+      CALENDAR_SERVICE_URL: http://calendar-service:3003
+      NOTIFICATION_SERVICE_URL: http://notification-service:3004
+      WEBSOCKET_SERVICE_URL: http://websocket-service:3005
+      PORT: 4000
+    ports:
+      - "4000:4000"
+    depends_on:
+      - auth-service
+      - task-service
+      - calendar-service
+      - notification-service
+      - websocket-service
+    networks:
+      - childcare-network
+    volumes:
+      - ./services/api-gateway:/app
+      - /app/node_modules
+
+  # 프론트엔드
+  web-frontend:
+    build:
+      context: ./frontend/web
+      dockerfile: Dockerfile
+    container_name: childcare_web
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+      NEXT_PUBLIC_WS_URL: ws://localhost:3005
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api-gateway
+    networks:
+      - childcare-network
+    volumes:
+      - ./frontend/web:/app
+      - /app/node_modules
+      - /app/.next
+
+  # 개발 도구
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: childcare_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@childcare.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - childcare-network
+    profiles:
+      - dev-tools
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: childcare_redis_commander
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - childcare-network
+    profiles:
+      - dev-tools
+
+  mongo-express:
+    image: mongo-express:latest
+    container_name: childcare_mongo_express
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: root
+      ME_CONFIG_MONGODB_ADMINPASSWORD: rootpassword
+      ME_CONFIG_MONGODB_URL: mongodb://root:rootpassword@mongodb:27017/
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: admin123
+    ports:
+      - "8082:8081"
+    depends_on:
+      - mongodb
+    networks:
+      - childcare-network
+    profiles:
+      - dev-tools
+
+volumes:
+  postgres-data:
+  redis-data:
+  mongodb-data:
+
+networks:
+  childcare-network:
+    driver: bridge

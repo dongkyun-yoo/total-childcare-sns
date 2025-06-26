@@ -1,0 +1,83 @@
+{
+  "name": "total-childcare-sns",
+  "version": "1.0.0",
+  "description": "토탈 자녀케어 SNS - 부모와 자녀를 위한 통합 시간관리 및 다채널 메시징 플랫폼",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:auth\" \"npm run dev:task\" \"npm run dev:calendar\" \"npm run dev:notification\"",
+    "dev:auth": "cd services/auth && npm run dev",
+    "dev:task": "cd services/task && npm run dev",
+    "dev:calendar": "cd services/calendar && npm run dev",
+    "dev:notification": "cd services/notification && npm run dev",
+    "dev:websocket": "cd services/websocket && npm run dev",
+    "dev:gateway": "cd services/api-gateway && npm run dev",
+    "dev:web": "cd frontend/web && npm run dev",
+    "dev:mobile": "cd frontend/mobile && npm run dev",
+    "build": "npm run build:services && npm run build:frontend",
+    "build:services": "concurrently \"npm run build:auth\" \"npm run build:task\" \"npm run build:calendar\" \"npm run build:notification\"",
+    "build:auth": "cd services/auth && npm run build",
+    "build:task": "cd services/task && npm run build",
+    "build:calendar": "cd services/calendar && npm run build",
+    "build:notification": "cd services/notification && npm run build",
+    "build:websocket": "cd services/websocket && npm run build",
+    "build:gateway": "cd services/api-gateway && npm run build",
+    "build:frontend": "concurrently \"npm run build:web\" \"npm run build:mobile\"",
+    "build:web": "cd frontend/web && npm run build",
+    "build:mobile": "cd frontend/mobile && npm run build",
+    "test": "jest --config=jest.config.js",
+    "test:unit": "jest --config=jest.config.js --testPathPattern=unit",
+    "test:integration": "jest --config=jest.config.js --testPathPattern=integration",
+    "test:e2e": "playwright test",
+    "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
+    "lint:fix": "eslint . --ext .ts,.tsx,.js,.jsx --fix",
+    "typecheck": "tsc --noEmit",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "k8s:deploy": "kubectl apply -f infrastructure/kubernetes/",
+    "k8s:delete": "kubectl delete -f infrastructure/kubernetes/",
+    "setup": "npm install && npm run setup:services && npm run setup:frontend",
+    "setup:services": "cd services && npm run setup",
+    "setup:frontend": "cd frontend && npm run setup",
+    "clean": "rm -rf node_modules services/*/node_modules frontend/*/node_modules",
+    "reset": "npm run clean && npm install"
+  },
+  "keywords": [
+    "childcare",
+    "parenting",
+    "sns",
+    "messaging",
+    "time-management",
+    "family",
+    "notification",
+    "calendar",
+    "task-management"
+  ],
+  "author": "Total Childcare SNS Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "concurrently": "^8.2.0",
+    "eslint": "^8.45.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-prettier": "^5.0.0",
+    "jest": "^29.6.0",
+    "playwright": "^1.37.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.1.0"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "workspaces": [
+    "services/*",
+    "frontend/*"
+  ]
+}
