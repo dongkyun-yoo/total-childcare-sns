@@ -1,0 +1,36 @@
+{
+  "version": 2,
+  "name": "actcs-messaging",
+  "builds": [
+    {
+      "src": "services/messaging/src/index.ts",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": "services/messaging/src/**"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/services/messaging/src/index.ts"
+    },
+    {
+      "src": "/health",
+      "dest": "/services/messaging/src/index.ts"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production",
+    "SUPABASE_URL": "@supabase-url",
+    "SUPABASE_ANON_KEY": "@supabase-anon-key",
+    "SUPABASE_SERVICE_KEY": "@supabase-service-key",
+    "KAKAO_ACCESS_TOKEN": "@kakao-access-token",
+    "JWT_SECRET": "@jwt-secret"
+  },
+  "functions": {
+    "services/messaging/src/index.ts": {
+      "maxDuration": 30
+    }
+  }
+}

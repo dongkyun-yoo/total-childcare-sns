@@ -1,0 +1,38 @@
+# Render.com 무료 배포 설정
+# Render: 무료 웹 서비스 (750시간/월, 자동 sleep)
+
+# render.yaml
+services:
+  - type: web
+    name: actcs-messaging
+    env: node
+    plan: free  # 무료 플랜
+    buildCommand: cd services/messaging && npm install && npm run build
+    startCommand: cd services/messaging && npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: SUPABASE_URL
+        sync: false  # 환경변수로 수동 설정
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: KAKAO_ACCESS_TOKEN
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+    
+  # 스케줄러 대신 cron-job.org 사용 (무료)
+  # https://cron-job.org 에서 다음 URL들을 등록:
+  # - https://actcs-messaging.onrender.com/api/messaging/process-scheduled (매분)
+  # - https://actcs-messaging.onrender.com/api/messaging/queue-health (5분마다)
+
+---
+# 배포 단계:
+# 1. GitHub 연동: render.com에서 저장소 연결
+# 2. 환경변수 설정: Render 대시보드에서 설정
+# 3. 자동 배포: git push 시 자동 배포

@@ -1,0 +1,96 @@
+# 로컬/VPS 무료 배포용 Docker Compose
+# Oracle Cloud, AWS EC2 Free Tier, 또는 개인 VPS에서 사용
+
+version: '3.8'
+
+services:
+  # PostgreSQL (Supabase 대신 로컬 사용)
+  postgres:
+    image: postgres:15-alpine
+    container_name: actcs_postgres_free
+    environment:
+      POSTGRES_DB: actcs_db
+      POSTGRES_USER: actcs_user
+      POSTGRES_PASSWORD: actcs_pass
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./supabase-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./init-auth.sql:/docker-entrypoint-initdb.d/02-auth.sql
+    restart: unless-stopped
+
+  # Redis (메시지 큐 + 캐시)
+  redis:
+    image: redis:7-alpine
+    container_name: actcs_redis_free
+    command: redis-server --appendonly yes --maxmemory 100mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  # 메시징 서비스
+  messaging-service:
+    build:
+      context: ../../services/messaging
+      dockerfile: Dockerfile
+    container_name: actcs_messaging_free
+    environment:
+      NODE_ENV: production
+      PORT: 3004
+      DATABASE_URL: postgresql://actcs_user:actcs_pass@postgres:5432/actcs_db
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-key}
+      KAKAO_ACCESS_TOKEN: ${KAKAO_ACCESS_TOKEN}
+      WEB_APP_URL: ${WEB_APP_URL:-http://localhost:3000}
+    ports:
+      - "3004:3004"
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx (리버스 프록시 + SSL)
+  nginx:
+    image: nginx:alpine
+    container_name: actcs_nginx_free
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/ssl/certs
+    depends_on:
+      - messaging-service
+    restart: unless-stopped
+
+  # Cron 스케줄러 (별도 컨테이너)
+  scheduler:
+    image: alpine:latest
+    container_name: actcs_scheduler_free
+    command: |
+      sh -c "
+        apk add --no-cache curl &&
+        echo '* * * * * curl -X POST http://messaging-service:3004/api/messaging/process-scheduled' | crontab - &&
+        echo '*/5 * * * * curl -X GET http://messaging-service:3004/api/messaging/queue-health' | crontab - &&
+        crond -f -l 2
+      "
+    depends_on:
+      - messaging-service
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+    name: actcs_network

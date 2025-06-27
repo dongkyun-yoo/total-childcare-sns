@@ -1,0 +1,53 @@
+# Railway.app 무료 배포 설정
+# Railway: 월 500시간 무료 (hobby plan)
+
+# railway.json
+{
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  },
+  "environments": {
+    "production": {
+      "variables": {
+        "NODE_ENV": "production",
+        "PORT": "$PORT"
+      }
+    }
+  }
+}
+
+---
+# Dockerfile.railway (Railway 최적화)
+FROM node:18-alpine
+
+WORKDIR /app
+
+# 패키지 파일 복사
+COPY services/messaging/package*.json ./
+RUN npm ci --only=production
+
+# 소스 코드 복사
+COPY services/messaging/src ./src
+COPY services/messaging/tsconfig.json ./
+
+# TypeScript 빌드
+RUN npm run build
+
+# Railway는 자동으로 PORT 환경변수 제공
+EXPOSE $PORT
+
+CMD ["npm", "start"]
+
+---
+# 배포 명령어
+# 1. Railway CLI 설치
+# npm install -g @railway/cli
+
+# 2. 로그인 및 배포
+# railway login
+# railway init
+# railway up
